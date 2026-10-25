@@ -49,7 +49,7 @@
 
 #ifdef MINGW
 //Para usar GetLogicalDrives
-#include <winbase.h>
+#include <windows.h>
 #endif
 
 
