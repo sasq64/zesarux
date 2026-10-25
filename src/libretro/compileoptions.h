@@ -35,4 +35,9 @@
 #define TOTAL_TODO_ITEMS 0
 #define BUILDNUMBER "0"
 
+/* zesarux.h needs it before <windows.h>, which newer MinGW stdlib.h no longer pulls in */
+#if defined(_WIN32) && !defined(MAX_PATH)
+#define MAX_PATH 260
+#endif
+
 #endif
