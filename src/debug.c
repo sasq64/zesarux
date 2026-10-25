@@ -1323,6 +1323,7 @@ void debug_printf (int debuglevel, const char * format , ...)
             if (
                 //!strcmp(scr_new_driver_name,"stdout") ||
                 !strcmp(scr_new_driver_name,"simpletext") ||
+                !strcmp(scr_new_driver_name,"libretro") ||
                 !strcmp(scr_new_driver_name,"null")
             )
             {

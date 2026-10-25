@@ -1356,9 +1356,11 @@ void envio_audio(void)
 
     int frames_por_buffer_audio=FRAMES_VECES_BUFFER_AUDIO;
 
+#ifndef LIBRETRO
     if (machine_60hz.v) {
         frames_por_buffer_audio=6;
     }
+#endif
 
 	if (contador_frames_veces_buffer_audio>=frames_por_buffer_audio) {
 		contador_frames_veces_buffer_audio=0;

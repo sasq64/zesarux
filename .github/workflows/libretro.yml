@@ -1,0 +1,236 @@
+name: libretro core
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [libretro]
+    paths-ignore:
+      - '**.md'
+      - '.github/ISSUE_TEMPLATE/**'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  linux-x86_64:
+    name: Linux x86_64
+    # Oldest supported runner, so the core links against an older glibc and
+    # stays loadable on the widest range of RetroArch installs.
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v6
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential file
+
+      - name: Build core
+        run: make -C src -f Makefile.libretro platform=unix -j"$(nproc)"
+
+      - name: Inspect core
+        working-directory: src
+        run: |
+          file zesarux_libretro.so
+          ls -l zesarux_libretro.so
+          # A core that links but exports no entry points loads and then does
+          # nothing, so check for one of them rather than just for the file.
+          nm -D --defined-only zesarux_libretro.so | grep -q ' T retro_run'
+          cat libretro/zesarux_libretro.info
+
+      - name: Upload core
+        uses: actions/upload-artifact@v7
+        with:
+          name: zesarux_libretro-linux-x86_64
+          path: |
+            src/zesarux_libretro.so
+            src/libretro/zesarux_libretro.info
+          if-no-files-found: error
+
+  macos-arm64:
+    name: macOS arm64
+    runs-on: macos-15
+    timeout-minutes: 60
+    env:
+      MACOSX_DEPLOYMENT_TARGET: "11.0"
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v6
+
+      - name: Build core
+        run: make -C src -f Makefile.libretro platform=osx -j"$(sysctl -n hw.ncpu)"
+
+      - name: Inspect core
+        working-directory: src
+        run: |
+          file zesarux_libretro.dylib
+          ls -l zesarux_libretro.dylib
+          # Fail on a stray x86_64 slice as well as on a core with no entry points.
+          lipo -info zesarux_libretro.dylib | grep -q 'arm64'
+          nm -gU zesarux_libretro.dylib | grep -q '_retro_run'
+          cat libretro/zesarux_libretro.info
+
+      - name: Upload core
+        uses: actions/upload-artifact@v7
+        with:
+          name: zesarux_libretro-macos-arm64
+          path: |
+            src/zesarux_libretro.dylib
+            src/libretro/zesarux_libretro.info
+          if-no-files-found: error
+
+  windows-x64:
+    name: Windows x64
+    runs-on: windows-2025
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v6
+
+      # UCRT64 gcc plus the -static link in Makefile.libretro leaves the DLL
+      # depending on nothing but ucrtbase — shipped with Windows 10 1803 and later.
+      - name: Set up MSYS2 (UCRT64)
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          release: false
+          install: >-
+            make
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-binutils
+
+      - name: Build core
+        run: make -C src -f Makefile.libretro platform=win -j"$(nproc)"
+
+      - name: Inspect core
+        working-directory: src
+        run: |
+          file zesarux_libretro.dll
+          ls -l zesarux_libretro.dll
+          # The export table, not the symbol table, in case the DLL is stripped.
+          objdump -p zesarux_libretro.dll | grep -q 'retro_run'
+          # Only system DLLs may be imported; MinGW runtimes are not on target machines.
+          objdump -p zesarux_libretro.dll | grep 'DLL Name'
+          if objdump -p zesarux_libretro.dll | grep -iE 'DLL Name: lib(winpthread|gcc|stdc)'; then exit 1; fi
+          cat libretro/zesarux_libretro.info
+
+      - name: Upload core
+        uses: actions/upload-artifact@v7
+        with:
+          name: zesarux_libretro-windows-x64
+          path: |
+            src/zesarux_libretro.dll
+            src/libretro/zesarux_libretro.info
+          if-no-files-found: error
+
+  # Publishes the three cores to a rolling "latest" release, so the demarc app
+  # can fetch them from a URL that never changes. Both of these resolve to the
+  # newest successful build:
+  #   https://github.com/sasq64/zesarux/releases/download/latest/<asset>
+  #   https://github.com/sasq64/zesarux/releases/latest/download/<asset>
+  # manifest.json lists each zip with its size and sha256.
+  publish:
+    name: Publish rolling release
+    needs: [linux-x86_64, macos-arm64, windows-x64]
+    if: github.ref == 'refs/heads/libretro'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: latest
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v6
+
+      - name: Download built cores
+        uses: actions/download-artifact@v8
+        with:
+          path: dist
+
+      # One zip per platform, each holding the core under the plain name
+      # RetroArch expects (zesarux_libretro.so/.dylib/.dll) plus the .info, so the
+      # app can unzip straight into its cores directory. The artifacts keep the
+      # .info under libretro/, so flatten it back out here.
+      - name: Stage release assets
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          zip_core() {
+            artifact="$1"
+            core="$2"
+            (cd "dist/$artifact" \
+              && mv libretro/zesarux_libretro.info . \
+              && zip -9 -X "$GITHUB_WORKSPACE/release/$artifact.zip" "$core" zesarux_libretro.info)
+          }
+          zip_core zesarux_libretro-linux-x86_64 zesarux_libretro.so
+          zip_core zesarux_libretro-macos-arm64 zesarux_libretro.dylib
+          zip_core zesarux_libretro-windows-x64 zesarux_libretro.dll
+          ls -l release
+
+      - name: Write manifest.json
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib, json, os, re, pathlib
+
+          version = "0.0.0"
+          m = re.search(r'^#define EMULATOR_VERSION\s+"([^"]+)"',
+                        pathlib.Path("src/cpu.h").read_text(), re.M)
+          if m:
+              version = m.group(1)
+
+          assets = {
+              "linux-x86_64": ("zesarux_libretro-linux-x86_64.zip", "zesarux_libretro.so"),
+              "macos-arm64":  ("zesarux_libretro-macos-arm64.zip", "zesarux_libretro.dylib"),
+              "windows-x64":  ("zesarux_libretro-windows-x64.zip", "zesarux_libretro.dll"),
+          }
+          base = f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/releases/download/{os.environ['RELEASE_TAG']}"
+
+          manifest = {
+              "version": version,
+              "commit": os.environ["GITHUB_SHA"],
+              "run_id": os.environ["GITHUB_RUN_ID"],
+              "cores": {},
+          }
+          for platform, (name, core) in assets.items():
+              data = pathlib.Path("release", name).read_bytes()
+              manifest["cores"][platform] = {
+                  "file": name,
+                  "core": core,
+                  "url": f"{base}/{name}",
+                  "size": len(data),
+                  "sha256": hashlib.sha256(data).hexdigest(),
+              }
+
+          pathlib.Path("release/manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+          PY
+          cat release/manifest.json
+
+      - name: Move the rolling tag
+        run: |
+          set -euo pipefail
+          git tag -f "$RELEASE_TAG" "$GITHUB_SHA"
+          git push -f origin "refs/tags/$RELEASE_TAG"
+
+      - name: Publish release
+        run: |
+          set -euo pipefail
+          NOTES="Rolling libretro core build from \`$GITHUB_SHA\` — see manifest.json for versions and checksums."
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release edit "$RELEASE_TAG" --title "libretro core (latest)" --notes "$NOTES" --latest
+          else
+            gh release create "$RELEASE_TAG" --title "libretro core (latest)" --notes "$NOTES" --latest
+          fi
+          gh release upload "$RELEASE_TAG" release/* --clobber

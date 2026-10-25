@@ -1,0 +1,104 @@
+# libretro build of ZEsarUX.
+#
+# Needs no ./configure: libretro/compileoptions.h is force included instead,
+# and the objects go under libretro/obj so they never mix with a normal build.
+# main_unix.c is left out; libretro/lr_core.c drives zesarux_main() instead.
+#
+#   make -f Makefile.libretro            # release
+#   make -f Makefile.libretro DEBUG=1
+#   make -f Makefile.libretro platform=osx
+
+TARGET_NAME := zesarux
+LIBRETRO_DIR := libretro
+
+DEBUG ?= 0
+platform ?= unix
+
+ifeq ($(platform),unix)
+   TARGET := $(TARGET_NAME)_libretro.so
+   fpic := -fPIC
+   SHARED := -shared -Wl,--no-undefined -Wl,--version-script=$(LIBRETRO_DIR)/link.T
+else ifeq ($(platform),osx)
+   TARGET := $(TARGET_NAME)_libretro.dylib
+   fpic := -fPIC
+   SHARED := -dynamiclib
+else ifeq ($(platform),win)
+   TARGET := $(TARGET_NAME)_libretro.dll
+   fpic :=
+   SHARED := -shared -static -Wl,--no-undefined -Wl,--version-script=$(LIBRETRO_DIR)/link.T
+else
+   TARGET := $(TARGET_NAME)_libretro.so
+   fpic := -fPIC
+   SHARED := -shared -Wl,--no-undefined -Wl,--version-script=$(LIBRETRO_DIR)/link.T
+endif
+
+ifeq ($(DEBUG),1)
+   OPTIMIZE := -O0 -g
+else
+   OPTIMIZE := -O2
+endif
+
+SUBDIRS := audio copy_interfaces cores cpus machines menu snap storage \
+	soundchips third_party video video_chips zrcp zxvision
+vpath %.c . $(SUBDIRS)
+
+# The object list of the configure-generated Makefile, minus main_unix.o.
+CORE_OBJECTS := \
+	about_logo assemble atomic atomlite audio audio_ayplayer audionull \
+	audio_sine_table autoselectoptions ay38912 baseconf betadisk chardetect \
+	chardevice charset chloe chrome codetests coleco contend core_ace \
+	core_coleco core_cpc core_mk14 core_msx core_pcw core_ql \
+	core_reduced_spectrum core_sam core_sg1000 core_sms core_spectrum \
+	core_svi core_z88 core_zx8081 cpc cpu dandanator datagear debug \
+	debug_timings defcon didaktikgama dinamid3 disassemble diskio divide \
+	diviface divmmc ds1307 dsk enhanced_zx81_read esxdos_handler \
+	expression_parser ff ffsystem ffunicode gs hilow_barbanegra \
+	hilow_datadrive hilow_datadrive_audio ide if1 ifrom interface007 \
+	joystick jupiterace kartusho lec m68kcpu m68kdasm m68kopac m68kopdm \
+	m68kopnz m68kops mdvtool mem128 menu_bitmaps menu_debug_cpu \
+	menu_filesel menu_file_viewer_browser menu_items menu_items_settings \
+	menu_items_storage menu_zeng_online mhpokeador microdrive \
+	microdrive_raw mk14 mmc msx multiface network operaciones pcw pd765 \
+	phoenix playtzx plus3dos_handler printers prism ql ql_extract_img \
+	ql_extract_win ql_i8049 ql_qdos_handler ql_zx8302 qsound ramjet \
+	realjoystick remote saa_simul sam samram scl2trd scmp scorpion screen \
+	screen_fx scrnull sensors settings sg1000 sms sn76489an snap snap_nex \
+	snap_ram snap_rzx snap_spg snap_z81 snap_zsf snap_zx8081 specmate \
+	spectra spg_depack spritechip spritefinder start stats superupgrade \
+	svi tape tape_pzx tape_smp tape_tap tape_tzx tbblue textspeech timer \
+	timex transtape tsconf tv uartbridge ula ulaplus utils utils_math \
+	utils_text_adventure vdp_9918a vdp_9918a_sms video_chips_common \
+	z80_codprddfd z80_codpred z80_codsinpr z88 zeng zeng_online \
+	zeng_online_client zip zvfs zx8081 zxevo zxmmcplus zxpand zxuno \
+	zxvision zxvision_private zxvision_topbar
+
+LIBRETRO_OBJECTS := lr_core lr_drivers
+
+OBJDIR := $(LIBRETRO_DIR)/obj
+OBJECTS := $(addprefix $(OBJDIR)/,$(addsuffix .o,$(CORE_OBJECTS))) \
+	$(addprefix $(OBJDIR)/$(LIBRETRO_DIR)/,$(addsuffix .o,$(LIBRETRO_OBJECTS)))
+
+INCFLAGS := -I$(LIBRETRO_DIR) -I. $(addprefix -I,$(SUBDIRS))
+
+CFLAGS += $(OPTIMIZE) $(fpic) $(INCFLAGS) -fsigned-char -w \
+	-DLIBRETRO -include $(LIBRETRO_DIR)/compileoptions.h
+LDFLAGS += $(fpic) $(SHARED)
+LIBS := -lpthread -lm
+
+all: $(TARGET)
+
+$(TARGET): $(OBJECTS)
+	$(CC) -o $@ $(OBJECTS) $(LDFLAGS) $(LIBS)
+
+$(OBJDIR)/$(LIBRETRO_DIR)/%.o: $(LIBRETRO_DIR)/%.c $(LIBRETRO_DIR)/lr_drivers.h
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+$(OBJDIR)/%.o: %.c $(LIBRETRO_DIR)/compileoptions.h
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+clean:
+	rm -rf $(OBJDIR) $(TARGET)
+
+.PHONY: all clean

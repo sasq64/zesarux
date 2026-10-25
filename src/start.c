@@ -246,6 +246,9 @@
 
 
 #include "audionull.h"
+#ifdef LIBRETRO
+#include "libretro/lr_drivers.h"
+#endif
 
 #ifdef USE_PTHREADS
 #include <pthread.h>
@@ -2750,6 +2753,13 @@ void main_init_video(void)
 #endif
 
 
+#ifdef LIBRETRO
+    add_scr_init_array("libretro",scrlibretro_init,set_scrdriver_libretro);
+    if (!strcmp(driver_screen,"libretro")) {
+            set_scrdriver_libretro();
+    }
+#endif
+
     //Y finalmente null video driver
     add_scr_init_array("null",scrnull_init,set_scrdriver_null);
     if (!strcmp(driver_screen,"null")) {
@@ -2848,6 +2858,13 @@ void main_init_audio(void)
 
 
 
+
+#ifdef LIBRETRO
+                add_audio_init_array("libretro",audiolibretro_init,set_audiodriver_libretro);
+                if (!strcmp(driver_audio,"libretro")) {
+                        set_audiodriver_libretro();
+                }
+#endif
 
                 //Y finalmente null audio driver
                 add_audio_init_array("null",audionull_init,set_audiodriver_null);
@@ -4436,6 +4453,9 @@ int parse_cmdline_options(int desde_commandline)
 
 
                 if (!strcmp(driver_screen,"null")) drivervook=1;
+#ifdef LIBRETRO
+                if (!strcmp(driver_screen,"libretro")) drivervook=1;
+#endif
 
                 if (!drivervook) {
                     printf ("Video Driver %s not supported\n",driver_screen);
@@ -4490,6 +4510,9 @@ int parse_cmdline_options(int desde_commandline)
 #endif
 
                                 if (!strcmp(driver_audio,"null")) driveraook=1;
+#ifdef LIBRETRO
+                                if (!strcmp(driver_audio,"libretro")) driveraook=1;
+#endif
 
                                 if (!driveraook) {
                                         printf ("Audio Driver %s not supported\n",driver_audio);
@@ -9223,6 +9246,8 @@ Also, you should keep the following copyright message, beginning with "Begin Cop
 
 
 
+    //En libretro las señales son del proceso que carga el core
+#ifndef LIBRETRO
     //Capturar segmentation fault
     //desactivado normalmente en versiones snapshot
     signal(SIGSEGV, segfault_signal_handler);
@@ -9246,6 +9271,7 @@ Also, you should keep the following copyright message, beginning with "Begin Cop
 #ifndef MINGW
     //Capturar sigpipe
     signal(SIGPIPE, sigpipe_signal_handler);
+#endif
 #endif
 
 
@@ -9574,6 +9600,11 @@ Also, you should keep the following copyright message, beginning with "Begin Cop
     //zxvision_restore_windows_on_startup();
 
     //printf("menu abierto: %d menu_overlay_activo: %d\n",menu_abierto,menu_overlay_activo);
+
+    //En libretro el bucle de emulacion lo lleva retro_run
+#ifdef LIBRETRO
+    return 0;
+#endif
 
     //Inicio bucle de emulacion
 

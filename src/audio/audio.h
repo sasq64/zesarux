@@ -34,7 +34,12 @@
 //Dice cuantos frames enteros de pantalla hay que esperar antes de enviar el audio
 //en ZXSpectr usamos buffers de 10 frames
 //pero parece que aqui como el sincronismo no es tan bueno, no se puede hacer tanto
+#ifdef LIBRETRO
+//En libretro se envia el audio de cada frame en su retro_run
+#define FRAMES_VECES_BUFFER_AUDIO 1
+#else
 #define FRAMES_VECES_BUFFER_AUDIO 5
+#endif
 //#define FRAMES_VECES_BUFFER_AUDIO 10
 
 #define AUDIO_BUFFER_SIZE (312*FRAMES_VECES_BUFFER_AUDIO)

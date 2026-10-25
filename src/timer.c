@@ -850,6 +850,10 @@ void timer_storage_common_accelerate_saving_decrease_counter(void)
 
 void timer_pause_waiting_end_frame(void)
 {
+#ifdef LIBRETRO
+	//retro_run vuelve en cuanto acaba el frame, no hay que esperar
+	return;
+#endif
 
 	//printf ("esperando final frame\n");
 

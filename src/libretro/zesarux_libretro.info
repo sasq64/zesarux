@@ -1,0 +1,18 @@
+# Software Information
+display_name = "Sinclair - ZX Spectrum Next (ZEsarUX)"
+authors = "Cesar Hernandez Bano"
+supported_extensions = "nex|snx|sna|z80|zsf|tap|tzx|pzx|mmc|img"
+corename = "ZEsarUX"
+categories = "Emulator"
+license = "GPLv3"
+permissions = ""
+display_version = "13.1-SN"
+
+# Hardware Information
+manufacturer = "Sinclair"
+systemname = "ZX Spectrum Next"
+systemid = "zx_spectrum_next"
+
+# Libretro Features
+supports_no_game = "false"
+savestate = "false"
