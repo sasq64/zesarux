@@ -26,7 +26,7 @@ else ifeq ($(platform),win)
    TARGET := $(TARGET_NAME)_libretro.dll
    fpic :=
    SHARED := -shared -static -Wl,--no-undefined -Wl,--version-script=$(LIBRETRO_DIR)/link.T
-   PLATFORM_DEFINES := -DMINGW
+   PLATFORM_DEFINES := -DMINGW -fpermissive
    PLATFORM_LIBS := -lwinmm -lshell32
 else
    TARGET := $(TARGET_NAME)_libretro.so
