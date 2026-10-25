@@ -26,6 +26,8 @@ else ifeq ($(platform),win)
    TARGET := $(TARGET_NAME)_libretro.dll
    fpic :=
    SHARED := -shared -static -Wl,--no-undefined -Wl,--version-script=$(LIBRETRO_DIR)/link.T
+   PLATFORM_DEFINES := -DMINGW
+   PLATFORM_LIBS := -lwinmm -lshell32
 else
    TARGET := $(TARGET_NAME)_libretro.so
    fpic := -fPIC
@@ -81,9 +83,9 @@ OBJECTS := $(addprefix $(OBJDIR)/,$(addsuffix .o,$(CORE_OBJECTS))) \
 INCFLAGS := -I$(LIBRETRO_DIR) -I. $(addprefix -I,$(SUBDIRS))
 
 CFLAGS += $(OPTIMIZE) $(fpic) $(INCFLAGS) -fsigned-char -w \
-	-DLIBRETRO -include $(LIBRETRO_DIR)/compileoptions.h
+	-DLIBRETRO $(PLATFORM_DEFINES) -include $(LIBRETRO_DIR)/compileoptions.h
 LDFLAGS += $(fpic) $(SHARED)
-LIBS := -lpthread -lm
+LIBS := -lpthread -lm $(PLATFORM_LIBS)
 
 all: $(TARGET)
 
